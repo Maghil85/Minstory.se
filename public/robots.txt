@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+
+# Blockera admin-panelen från indexering
+Disallow: /admin
+
+Sitemap: https://minstory.se/sitemap.xml

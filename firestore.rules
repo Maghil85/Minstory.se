@@ -1,0 +1,139 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ════════════════════════════════════════════════════════════════
+    //  HJÄLPFUNKTIONER
+    // ════════════════════════════════════════════════════════════════
+
+    function isValidEmail(email) {
+      return email is string && email.matches('.*@.*\\..*') && email.size() < 200;
+    }
+
+    function isNonEmptyString(val) {
+      return val is string && val.size() > 0;
+    }
+
+    function isShortString(val) {
+      return val is string && val.size() < 500;
+    }
+
+    function isLongString(val) {
+      return val is string && val.size() < 10000;
+    }
+
+    function isValidStatus(s) {
+      return s in ['pending', 'paid', 'processing', 'completed', 'cancelled'];
+    }
+
+    function isValidOrderType(t) {
+      return t in ['ai', 'handgjord'];
+    }
+
+    function isValidFormat(f) {
+      return f in ['classic', 'landscape', 'digital', 'comic', ''];
+    }
+
+    function isValidPrintOption(p) {
+      return p in ['soft', 'hard'];
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    //  ORDERS — beställningar (AI-böcker & handgjorda böcker)
+    // ════════════════════════════════════════════════════════════════
+    // Fält: personName, personAge, relation, description, storyIdea,
+    //       email, bookFormat, bookStyle, pageCount, bookTitle, price,
+    //       type, status, bookPages[], coverImage, createdAt
+    // ════════════════════════════════════════════════════════════════
+    match /orders/{orderId} {
+
+      // Kunder får skapa beställningar med korrekt struktur
+      allow create: if
+        request.resource.data.keys().hasAll(['personName', 'email', 'type', 'status', 'createdAt', 'pageCount', 'price'])
+        && isNonEmptyString(request.resource.data.personName)
+        && isShortString(request.resource.data.personName)
+        && isValidEmail(request.resource.data.email)
+        && isValidOrderType(request.resource.data.type)
+        && isValidStatus(request.resource.data.status)
+        && request.resource.data.status in ['pending', 'paid']
+        && request.resource.data.pageCount is int
+        && request.resource.data.pageCount >= 1
+        && request.resource.data.pageCount <= 100
+        && request.resource.data.price is number
+        && request.resource.data.price >= 0
+        && request.resource.data.price <= 10000
+        && (request.resource.data.bookFormat == null || isValidFormat(request.resource.data.bookFormat))
+        && (request.resource.data.description == null || isLongString(request.resource.data.description))
+        && (request.resource.data.storyIdea == null || isLongString(request.resource.data.storyIdea));
+
+      // Alla kan läsa orders (admin-panelen är lösenordsbaserad, ej Firebase Auth)
+      // Kunder filtrerar via email-query i subscribeCustomerOrders
+      // TODO: byt till auth-claims när admin-inloggning migreras till Firebase Auth
+      allow read: if true;
+
+      // Endast status-fältet får uppdateras (admin sätter ny status)
+      allow update: if
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && isValidStatus(request.resource.data.status);
+
+      // Radering ej tillåten via klienten
+      allow delete: if false;
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    //  SUPPORT — meddelanden mellan kund och admin
+    // ════════════════════════════════════════════════════════════════
+    // Fält: orderId, senderType, senderName, senderEmail,
+    //       subject, text, createdAt, read
+    // ════════════════════════════════════════════════════════════════
+    match /support/{msgId} {
+
+      // Alla kan skicka supportmeddelanden (kund och admin via webbklienten)
+      allow create: if
+        request.resource.data.keys().hasAll(['senderType', 'text', 'createdAt'])
+        && request.resource.data.senderType in ['customer', 'admin']
+        && isNonEmptyString(request.resource.data.text)
+        && isLongString(request.resource.data.text)
+        && (request.resource.data.senderName == null || isShortString(request.resource.data.senderName))
+        && (request.resource.data.senderEmail == null || isValidEmail(request.resource.data.senderEmail))
+        && (request.resource.data.subject == null || isShortString(request.resource.data.subject))
+        && request.resource.data.read == false;
+
+      // Alla kan läsa meddelanden
+      allow read: if true;
+
+      // Endast "read"-flaggan får ändras (admin markerar som läst)
+      allow update: if
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read'])
+        && request.resource.data.read is bool;
+
+      allow delete: if false;
+    }
+
+    // ════════════════════════════════════════════════════════════════
+    //  PRINT_ORDERS — beställningar av tryckt bok
+    // ════════════════════════════════════════════════════════════════
+    // Fält: orderId, bookTitle, bookFormat, printOption, totalPrice,
+    //       status, createdAt
+    // ════════════════════════════════════════════════════════════════
+    match /printOrders/{printId} {
+
+      allow create: if
+        request.resource.data.keys().hasAll(['printOption', 'totalPrice', 'status', 'createdAt'])
+        && isValidPrintOption(request.resource.data.printOption)
+        && request.resource.data.totalPrice is number
+        && request.resource.data.totalPrice >= 0
+        && request.resource.data.totalPrice <= 10000
+        && request.resource.data.status == 'pending';
+
+      allow read: if true;
+
+      // Admin kan uppdatera status
+      allow update: if
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && isValidStatus(request.resource.data.status);
+
+      allow delete: if false;
+    }
+  }
+}
