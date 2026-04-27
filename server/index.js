@@ -15,12 +15,16 @@ function getMailTransporter() {
   if (!process.env.SMTP_PASSWORD) return null;
   return nodemailer.createTransport({
     host: "smtp.strato.com",
-    port: 465,
-    secure: true,
+    port: 587,
+    secure: false,
+    requireTLS: true,
     auth: {
       user: "kontakt@minstory.se",
       pass: process.env.SMTP_PASSWORD,
     },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
   });
 }
 
