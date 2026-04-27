@@ -1,12 +1,37 @@
+import { useState, useEffect, useRef } from "react";
 import { colors, spacing, fonts } from "../styles/theme";
 
-const SWISH_NUMBER = import.meta.env.VITE_SWISH_NUMBER || "123 094 78 87";
-const SWISH_NAME   = import.meta.env.VITE_SWISH_NAME   || "Bokarent Sverige AB";
+const SWISH_NUMBER  = import.meta.env.VITE_SWISH_NUMBER || "1230947887";
+const SWISH_NAME    = import.meta.env.VITE_SWISH_NAME   || "ITfaktor, BokaRent Sverige";
+const WAIT_SECONDS  = 30; // sekunder att vänta efter Swish-klick
 
 export function SwishPayment({ price, pageCount, personName, onPaid, onBack }) {
-  const amountNum   = price ? price.replace(/[^0-9]/g, "") : "";
-  const swishMsg    = `Minstory ${pageCount} sidor`;
-  const deepLink    = `swish://payment?data={"version":1,"payee":{"value":"${SWISH_NUMBER.replace(/\s/g, "")}","editable":false},"amount":{"value":${amountNum},"editable":false},"message":{"value":"${swishMsg}","editable":false}}`;
+  const [countdown, setCountdown] = useState(null); // null = not started, 0 = done
+  const timerRef = useRef(null);
+
+  const amountNum = price ? parseInt(price.replace(/[^0-9]/g, ""), 10) : 0;
+  const swishMsg  = `Minstory ${pageCount} sidor`;
+  const swishData = JSON.stringify({
+    version: 1,
+    payee:   { value: SWISH_NUMBER.replace(/\s/g, ""), editable: false },
+    amount:  { value: amountNum, editable: false },
+    message: { value: swishMsg, editable: false },
+  });
+  const deepLink = `swish://payment?data=${encodeURIComponent(swishData)}`;
+
+  function handleSwishClick() {
+    window.location.href = deepLink;
+    if (countdown !== null) return; // already started
+    setCountdown(WAIT_SECONDS);
+  }
+
+  useEffect(() => {
+    if (countdown === null || countdown <= 0) return;
+    timerRef.current = setTimeout(() => setCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(timerRef.current);
+  }, [countdown]);
+
+  const canConfirm = countdown !== null && countdown === 0;
 
   return (
     <section
@@ -41,6 +66,7 @@ export function SwishPayment({ price, pageCount, personName, onPaid, onBack }) {
         }}>
           {[
             { label: "Mottagare",      value: SWISH_NAME,    valueStyle: { color: "#fff", fontWeight: fonts.weight.bold, fontSize: fonts.size.md } },
+            { label: "Org. nr / namn",  value: "ITfaktor, BokaRent Sverige", valueStyle: { color: "rgba(255,255,255,0.65)", fontSize: fonts.size.sm } },
             { label: "Swish-nummer",   value: SWISH_NUMBER,  valueStyle: { color: "#FCD34D", fontWeight: fonts.weight.extrabold, fontSize: fonts.size.lg, letterSpacing: "0.04em" } },
             { label: "Belopp",         value: price,         valueStyle: { color: colors.primary, fontWeight: fonts.weight.extrabold, fontSize: fonts.size["2xl"] } },
             { label: "Meddelande",     value: swishMsg,      valueStyle: { color: "rgba(255,255,255,0.80)", fontSize: fonts.size.sm } },
@@ -64,10 +90,11 @@ export function SwishPayment({ price, pageCount, personName, onPaid, onBack }) {
         </div>
 
         {/* Öppna Swish-app */}
-        <a
-          href={deepLink}
+        <button
+          onClick={handleSwishClick}
           style={{
             display: "block",
+            width: "100%",
             textAlign: "center",
             background: "#00A870",
             color: "#fff",
@@ -75,38 +102,62 @@ export function SwishPayment({ price, pageCount, personName, onPaid, onBack }) {
             padding: `${spacing.lg} ${spacing["3xl"]}`,
             fontSize: fonts.size.md,
             fontWeight: fonts.weight.bold,
-            textDecoration: "none",
+            border: "none",
+            cursor: "pointer",
+            fontFamily: "inherit",
             marginBottom: spacing.sm,
             boxShadow: "0 4px 20px rgba(0,168,112,0.35)",
           }}
         >
           📱 Öppna Swish-appen
-        </a>
+        </button>
         <p style={{ color: "rgba(255,255,255,0.30)", fontSize: fonts.size.xs, textAlign: "center", margin: `0 0 ${spacing["2xl"]}` }}>
           Fungerar på mobil · Swish måste vara installerat
         </p>
 
-        {/* Bekräftelseknapp */}
+        {/* Bekräftelseknapp — visas med countdown efter Swish-klick */}
+        {countdown === null ? (
+          <p style={{ color: "rgba(255,255,255,0.35)", fontSize: fonts.size.xs, textAlign: "center", margin: `0 0 ${spacing.md}` }}>
+            Öppna Swish-appen ovan och genomför betalningen innan du bekräftar.
+          </p>
+        ) : countdown > 0 ? (
+          <div style={{ textAlign: "center", marginBottom: spacing.md }}>
+            <p style={{ color: "rgba(255,255,255,0.55)", fontSize: fonts.size.sm, margin: `0 0 ${spacing.sm}` }}>
+              Genomför betalningen i Swish…
+            </p>
+            <div style={{
+              display: "inline-flex", alignItems: "center", justifyContent: "center",
+              width: 56, height: 56, borderRadius: "50%",
+              border: `3px solid ${colors.primary}`,
+              color: colors.primary, fontSize: fonts.size.lg, fontWeight: fonts.weight.extrabold,
+            }}>
+              {countdown}
+            </div>
+          </div>
+        ) : null}
         <button
           onClick={onPaid}
+          disabled={!canConfirm}
           style={{
             width: "100%",
             padding: `${spacing.lg} ${spacing["3xl"]}`,
             borderRadius: "14px",
             border: "none",
-            background: `linear-gradient(135deg, ${colors.primary}, ${colors.primaryDark})`,
-            color: "#fff",
+            background: canConfirm
+              ? `linear-gradient(135deg, ${colors.primary}, ${colors.primaryDark})`
+              : "rgba(255,255,255,0.10)",
+            color: canConfirm ? "#fff" : "rgba(255,255,255,0.25)",
             fontSize: fonts.size.md,
             fontWeight: fonts.weight.bold,
-            cursor: "pointer",
+            cursor: canConfirm ? "pointer" : "not-allowed",
             fontFamily: "inherit",
-            boxShadow: "0 4px 20px rgba(245,158,11,0.40)",
+            boxShadow: canConfirm ? "0 4px 20px rgba(245,158,11,0.40)" : "none",
             marginBottom: spacing.md,
           }}
-          onMouseOver={(e)  => { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 28px rgba(245,158,11,0.50)"; }}
-          onMouseOut={(e)   => { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "0 4px 20px rgba(245,158,11,0.40)"; }}
+          onMouseOver={(e) => { if (canConfirm) { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 28px rgba(245,158,11,0.50)"; } }}
+          onMouseOut={(e)  => { if (canConfirm) { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "0 4px 20px rgba(245,158,11,0.40)"; } }}
         >
-          ✅ Jag har betalat — skapa min bok nu
+          {countdown === null ? "✅ Jag har betalat — skapa min bok nu" : countdown > 0 ? `⏳ Väntar på betalning… (${countdown}s)` : "✅ Jag har betalat — skapa min bok nu"}
         </button>
 
         <button

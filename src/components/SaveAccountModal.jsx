@@ -1,16 +1,7 @@
 import { useState } from "react";
-import { createAccountAndLinkBook } from "../services/authService";
+import { createAccountAndLinkBook, signIn } from "../services/authService";
 import { colors, fonts, spacing } from "../styles/theme";
 
-/**
- * SaveAccountModal — visas efter bokgenerering.
- * Props:
- *   prefillEmail  — e-post från formuläret
- *   prefillName   — personens namn
- *   orderId       — Firestore-id att koppla till kontot
- *   onSaved       — () => void, kallas när konto skapats
- *   onDismiss     — () => void, kallas om användaren stänger
- */
 export function SaveAccountModal({ prefillEmail = "", prefillName = "", orderId, onSaved, onDismiss }) {
   const [email, setEmail]       = useState(prefillEmail);
   const [password, setPassword] = useState("");
@@ -18,37 +9,46 @@ export function SaveAccountModal({ prefillEmail = "", prefillName = "", orderId,
   const [loading, setLoading]   = useState(false);
   const [error, setError]       = useState(null);
   const [done, setDone]         = useState(false);
+  const [mode, setMode]         = useState("register"); // "register" | "login"
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError(null);
 
-    if (password.length < 6) {
-      setError("Lösenordet måste vara minst 6 tecken.");
-      return;
-    }
-    if (password !== confirm) {
-      setError("Lösenorden matchar inte.");
-      return;
-    }
-
-    setLoading(true);
-    try {
-      await createAccountAndLinkBook(email, password, prefillName, orderId);
-      setDone(true);
-      onSaved?.();
-    } catch (err) {
-      if (err.code === "auth/email-already-in-use") {
-        setError("Den e-postadressen är redan registrerad. Logga in istället.");
-      } else if (err.code === "auth/invalid-email") {
-        setError("Ogiltig e-postadress.");
-      } else if (err.code === "auth/configuration-not-found" || err.code?.includes("firebase")) {
-        setError("Firebase är inte konfigurerat ännu. Fyll i VITE_FIREBASE_*-variablerna i .env.");
-      } else {
-        setError(err.message || "Något gick fel. Försök igen.");
-      }
-    } finally {
-      setLoading(false);
+    if (mode === "register") {
+      if (password.length < 6) { setError("Lösenordet måste vara minst 6 tecken."); return; }
+      if (password !== confirm) { setError("Lösenorden matchar inte."); return; }
+      setLoading(true);
+      try {
+        await createAccountAndLinkBook(email, password, prefillName, orderId);
+        setDone(true);
+        onSaved?.();
+      } catch (err) {
+        if (err.code === "auth/email-already-in-use") {
+          setMode("login");
+          setError("Den e-postadressen är redan registrerad — logga in nedan.");
+        } else if (err.code === "auth/invalid-email") {
+          setError("Ogiltig e-postadress.");
+        } else if (err.code === "auth/weak-password") {
+          setError("Lösenordet är för svagt. Välj minst 6 tecken.");
+        } else {
+          setError(err.message || "Något gick fel. Försök igen.");
+        }
+      } finally { setLoading(false); }
+    } else {
+      if (!password) { setError("Ange ditt lösenord."); return; }
+      setLoading(true);
+      try {
+        await signIn(email, password);
+        setDone(true);
+        onSaved?.();
+      } catch (err) {
+        if (err.code === "auth/wrong-password" || err.code === "auth/invalid-credential") {
+          setError("Fel lösenord. Försök igen.");
+        } else {
+          setError(err.message || "Inloggning misslyckades.");
+        }
+      } finally { setLoading(false); }
     }
   }
 
@@ -101,66 +101,38 @@ export function SaveAccountModal({ prefillEmail = "", prefillName = "", orderId,
           ) : (
             <form onSubmit={handleSubmit}>
               <div style={{ marginBottom: 14 }}>
-                <label style={{ fontSize: 13, fontWeight: 600, color: "#555", display: "block", marginBottom: 5 }}>
-                  E-post
-                </label>
-                <input
-                  type="email"
-                  required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  style={{
-                    width: "100%", padding: "10px 12px", borderRadius: 8,
-                    border: "1.5px solid #ddd", fontSize: 14, boxSizing: "border-box",
-                  }}
+                <label style={{ fontSize: 13, fontWeight: 600, color: "#555", display: "block", marginBottom: 5 }}>E-post</label>
+                <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1.5px solid #ddd", fontSize: 14, boxSizing: "border-box" }}
                 />
               </div>
 
               <div style={{ marginBottom: 14 }}>
                 <label style={{ fontSize: 13, fontWeight: 600, color: "#555", display: "block", marginBottom: 5 }}>
-                  Välj lösenord
+                  {mode === "register" ? "Välj lösenord" : "Lösenord"}
                 </label>
-                <input
-                  type="password"
-                  required
-                  minLength={6}
-                  placeholder="Minst 6 tecken"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  style={{
-                    width: "100%", padding: "10px 12px", borderRadius: 8,
-                    border: "1.5px solid #ddd", fontSize: 14, boxSizing: "border-box",
-                  }}
+                <input type="password" required minLength={mode === "register" ? 6 : 1}
+                  placeholder={mode === "register" ? "Minst 6 tecken" : "Ditt lösenord"}
+                  value={password} onChange={(e) => setPassword(e.target.value)}
+                  style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1.5px solid #ddd", fontSize: 14, boxSizing: "border-box" }}
                 />
               </div>
 
-              <div style={{ marginBottom: 18 }}>
-                <label style={{ fontSize: 13, fontWeight: 600, color: "#555", display: "block", marginBottom: 5 }}>
-                  Bekräfta lösenord
-                </label>
-                <input
-                  type="password"
-                  required
-                  placeholder="Upprepa lösenordet"
-                  value={confirm}
-                  onChange={(e) => setConfirm(e.target.value)}
-                  style={{
-                    width: "100%", padding: "10px 12px", borderRadius: 8,
-                    border: `1.5px solid ${confirm && confirm !== password ? "#e53e3e" : "#ddd"}`,
-                    fontSize: 14, boxSizing: "border-box",
-                  }}
-                />
-                {confirm && confirm !== password && (
-                  <p style={{ color: "#e53e3e", fontSize: 12, margin: "4px 0 0" }}>Lösenorden matchar inte</p>
-                )}
-              </div>
+              {mode === "register" && (
+                <div style={{ marginBottom: 18 }}>
+                  <label style={{ fontSize: 13, fontWeight: 600, color: "#555", display: "block", marginBottom: 5 }}>Bekräfta lösenord</label>
+                  <input type="password" required placeholder="Upprepa lösenordet" value={confirm}
+                    onChange={(e) => setConfirm(e.target.value)}
+                    style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: `1.5px solid ${confirm && confirm !== password ? "#e53e3e" : "#ddd"}`, fontSize: 14, boxSizing: "border-box" }}
+                  />
+                  {confirm && confirm !== password && (
+                    <p style={{ color: "#e53e3e", fontSize: 12, margin: "4px 0 0" }}>Lösenorden matchar inte</p>
+                  )}
+                </div>
+              )}
 
               {error && (
-                <div style={{
-                  background: "#fff5f5", border: "1px solid #fed7d7",
-                  borderRadius: 8, padding: "10px 14px", marginBottom: 14,
-                  color: "#c53030", fontSize: 13,
-                }}>
+                <div style={{ background: "#fff5f5", border: "1px solid #fed7d7", borderRadius: 8, padding: "10px 14px", marginBottom: 14, color: "#c53030", fontSize: 13 }}>
                   {error}
                 </div>
               )}
@@ -169,17 +141,22 @@ export function SaveAccountModal({ prefillEmail = "", prefillName = "", orderId,
                 width: "100%", padding: "13px",
                 background: loading ? "#ccc" : "linear-gradient(135deg, #2f855a, #276749)",
                 color: "#fff", border: "none", borderRadius: 10,
-                fontSize: 15, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer",
-                marginBottom: 10,
+                fontSize: 15, fontWeight: 700, cursor: loading ? "not-allowed" : "pointer", marginBottom: 10,
               }}>
-                {loading ? "Skapar konto…" : "✅ Skapa konto och spara bok"}
+                {loading
+                  ? (mode === "register" ? "Skapar konto…" : "Loggar in…")
+                  : (mode === "register" ? "✅ Skapa konto och spara bok" : "✅ Logga in och spara bok")}
+              </button>
+
+              <button type="button" onClick={() => { setMode(mode === "register" ? "login" : "register"); setError(null); setPassword(""); setConfirm(""); }}
+                style={{ width: "100%", padding: "11px", background: "none", border: "1.5px solid #e2e8f0", borderRadius: 10, fontSize: 14, color: "#4A5568", cursor: "pointer", fontFamily: "inherit", marginBottom: 8 }}
+              >
+                {mode === "register" ? "Har du redan ett konto? Logga in" : "Skapa nytt konto"}
               </button>
 
               <button type="button" onClick={onDismiss} style={{
-                width: "100%", padding: "11px",
-                background: "none", border: "1.5px solid #e2e8f0",
-                borderRadius: 10, fontSize: 14, color: "#718096",
-                cursor: "pointer", fontFamily: "inherit",
+                width: "100%", padding: "11px", background: "none", border: "none",
+                fontSize: 13, color: "#718096", cursor: "pointer", fontFamily: "inherit",
               }}>
                 Nej tack, fortsätt utan konto
               </button>

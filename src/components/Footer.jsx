@@ -131,9 +131,6 @@ export function Footer() {
                 hello@minstory.se
               </a>
             </p>
-            <p style={{ margin: `${spacing.xs} 0 0`, opacity: 0.8, fontSize: fonts.size.sm }}>
-              📱 +46 (0)123 456 789
-            </p>
           </div>
         </div>
 

@@ -231,6 +231,28 @@ function buildBackCoverHTML(book, w, h) {
 }
 
 /**
+ * Konverterar en bild-URL (eller data:-URI) till en base64 data URI.
+ * Returnerar originalet om hämtningen misslyckas.
+ */
+async function toDataUri(url) {
+  if (!url) return url;
+  if (url.startsWith("data:")) return url;
+  try {
+    const res = await fetch(url, { mode: "cors" });
+    if (!res.ok) throw new Error("bad status");
+    const blob = await res.blob();
+    return await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return url; // fall back to original URL
+  }
+}
+
+/**
  * Genererar och laddar ner en PDF av en bok.
  * @param {Object} book - { title, format, coverImage, backCoverText, pages: [{pageNumber, text, imageUrl}] }
  */
@@ -251,7 +273,14 @@ export async function downloadBookAsPdf(book) {
   container.style.cssText = `position:fixed;left:-9999px;top:0;width:${w}px;height:${h}px;overflow:hidden;`;
   document.body.appendChild(container);
 
-  const allPages = [null, ...book.pages, "back"]; // null = framsida, "back" = bakpärm
+  // Pre-fetch all images as data URIs to avoid CORS issues in html2canvas
+  const coverDataUri = await toDataUri(book.coverImage);
+  const pagesWithDataUris = await Promise.all(
+    (book.pages || []).map(async (p) => ({ ...p, imageUrl: await toDataUri(p.imageUrl) }))
+  );
+  const resolvedBook = { ...book, coverImage: coverDataUri, pages: pagesWithDataUris };
+
+  const allPages = [null, ...resolvedBook.pages, "back"]; // null = framsida, "back" = bakpärm
 
   // Vänta på att Google Fonts ska laddas (Playfair Display, Bangers)
   await document.fonts.ready;
@@ -260,9 +289,9 @@ export async function downloadBookAsPdf(book) {
     const page = allPages[i];
 
     container.innerHTML = page === null
-      ? buildCoverHTML(book, w, h)
+      ? buildCoverHTML(resolvedBook, w, h)
       : page === "back"
-      ? buildBackCoverHTML(book, w, h)
+      ? buildBackCoverHTML(resolvedBook, w, h)
       : fmt === "landscape" ? buildLandscapePageHTML(page, w, h)
       : fmt === "digital"   ? buildDigitalPageHTML(page, w, h)
       : fmt === "comic"     ? buildComicPageHTML(page, w, h)
@@ -280,5 +309,5 @@ export async function downloadBookAsPdf(book) {
   }
 
   document.body.removeChild(container);
-  pdf.save(`${book.title || "bok"}.pdf`);
+  pdf.save(`${resolvedBook.title || "bok"}.pdf`);
 }

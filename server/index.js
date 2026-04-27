@@ -261,7 +261,7 @@ async function stableImageStyleGuide(styleImageBuffer, mimeType, prompt, format 
   form.append("image", styleImageBuffer, { filename: "photo.jpg", contentType: mimeType });
   form.append("prompt", `${fmtStyle.stylePrefix}, highly detailed. ${prompt}`);
   form.append("negative_prompt", `${fmtStyle.negPrompt}, ugly, blurry, nsfw, watermark, text, low quality`);
-  form.append("fidelity", "0.5");
+  form.append("fidelity", "0.9");
   form.append("aspect_ratio", fmtStyle.aspect);
   form.append("output_format", "png");
 

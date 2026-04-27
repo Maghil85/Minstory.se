@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { colors, spacing, fonts } from "../styles/theme";
 import { BookFormatSelector } from "./BookFormatSelector";
 import { BookPreview } from "./BookPreview";
@@ -7,6 +7,7 @@ import { saveHandgjordOrder, saveAiOrder } from "../services/orderService";
 import { SupportWidget } from "./SupportWidget";
 import { SwishPayment } from "./SwishPayment";
 import { SaveAccountModal } from "./SaveAccountModal";
+import { subscribeAuthState } from "../services/authService";
 
 const fieldStyle = {
   width: "100%",
@@ -57,6 +58,12 @@ export function CreateStoryForm() {
   const [savedOrderId, setSavedOrderId] = useState(null);
   const [showSaveModal, setShowSaveModal] = useState(false);
   const [accountSaved, setAccountSaved] = useState(false);
+  const [currentUser, setCurrentUser] = useState(null);
+
+  useEffect(() => {
+    const unsub = subscribeAuthState((u) => setCurrentUser(u));
+    return () => unsub();
+  }, []);
   const [formData, setFormData] = useState({
     storyType: "",
     bookFormat: "",
@@ -149,6 +156,8 @@ export function CreateStoryForm() {
 
   // Visa genererad bok
   if (generatedBook) {
+    // Om redan inloggad — visa inte spara-konto-modal
+    const alreadyLoggedIn = !!currentUser;
     return (
       <>
         <BookPreview
@@ -158,13 +167,13 @@ export function CreateStoryForm() {
           totalPageCount={formData.pageCount}
           price={PACKAGES[creationType].find((p) => p.count === formData.pageCount)?.price}
           onGenerateFull={handleGenerateFull}
-          onSaveAccount={accountSaved ? null : () => setShowSaveModal(true)}
-          accountSaved={accountSaved}
+          onSaveAccount={(alreadyLoggedIn || accountSaved) ? null : () => setShowSaveModal(true)}
+          accountSaved={alreadyLoggedIn || accountSaved}
           customerEmail={formData.email}
           customerName={formData.personName}
         />
         <SupportWidget orderId={savedOrderId} customerName={formData.personName} />
-        {showSaveModal && (
+        {showSaveModal && !alreadyLoggedIn && (
           <SaveAccountModal
             prefillEmail={formData.email}
             prefillName={formData.personName}
