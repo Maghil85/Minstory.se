@@ -60,6 +60,9 @@ function getDb() {
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Railway och andra reverse proxies sätter X-Forwarded-For — behövs för rate limiting
+app.set("trust proxy", 1);
+
 const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGIN || "http://localhost:5173")
   .split(",")
   .map((o) => o.trim());
