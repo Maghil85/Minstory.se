@@ -581,8 +581,8 @@ export function BookPreview({ book, onReset, isPreview = false, totalPageCount, 
 
           {/* Print-knapp tas bort här — hanteras i print-addon-sektionen nedan */}
 
-          {/* Spara konto-knapp */}
-          {!isPreview && onSaveAccount && (
+          {/* Spara konto-knapp — dold under frysperiod */}
+          {false && !isPreview && onSaveAccount && (
             <button
               onClick={onSaveAccount}
               style={{

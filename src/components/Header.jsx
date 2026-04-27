@@ -20,6 +20,7 @@ export function Header() {
     }
   }, []);
 
+  const COMING_SOON = true; // Set to false to re-enable auth
   function openLogin()    { setAuthTab("login");    setShowAuth(true); }
   function openRegister() { setAuthTab("register"); setShowAuth(true); }
 
@@ -148,25 +149,27 @@ export function Header() {
                 )}
               </div>
             ) : (
-              /* ── Ej inloggad: Logga in + Registrera ── */
-              <button
-                  onClick={openLogin}
-                  onMouseEnter={(e) => { e.currentTarget.style.background = "#D97706"; e.currentTarget.style.transform = "translateY(-2px)"; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.background = "#F59E0B"; e.currentTarget.style.transform = "translateY(0)"; }}
-                  style={{
-                    padding: `${spacing.md} ${spacing.lg}`,
-                    borderRadius: "12px",
-                    border: "none",
-                    background: "#F59E0B",
-                    color: "#fff",
-                    fontSize: fonts.size.md,
-                    fontWeight: fonts.weight.bold,
-                    cursor: "pointer",
-                    fontFamily: "inherit",
-                    transition: "all 0.3s ease",
-                  }}>
-                  Logga in
-                </button>
+              /* ── Ej inloggad: dold under frysperiod ── */
+              COMING_SOON ? null : (
+                <button
+                    onClick={openLogin}
+                    onMouseEnter={(e) => { e.currentTarget.style.background = "#D97706"; e.currentTarget.style.transform = "translateY(-2px)"; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.background = "#F59E0B"; e.currentTarget.style.transform = "translateY(0)"; }}
+                    style={{
+                      padding: `${spacing.md} ${spacing.lg}`,
+                      borderRadius: "12px",
+                      border: "none",
+                      background: "#F59E0B",
+                      color: "#fff",
+                      fontSize: fonts.size.md,
+                      fontWeight: fonts.weight.bold,
+                      cursor: "pointer",
+                      fontFamily: "inherit",
+                      transition: "all 0.3s ease",
+                    }}>
+                    Logga in
+                  </button>
+              )
             )
           )}
         </nav>
