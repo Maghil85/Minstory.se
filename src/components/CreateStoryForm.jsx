@@ -160,6 +160,8 @@ export function CreateStoryForm() {
           onGenerateFull={handleGenerateFull}
           onSaveAccount={accountSaved ? null : () => setShowSaveModal(true)}
           accountSaved={accountSaved}
+          customerEmail={formData.email}
+          customerName={formData.personName}
         />
         <SupportWidget orderId={savedOrderId} customerName={formData.personName} />
         {showSaveModal && (

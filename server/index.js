@@ -8,6 +8,48 @@ import { rateLimit } from "express-rate-limit";
 import { uploadFromUrl, uploadFromBase64 } from "./uploadToStorage.js";
 import { getApps } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import nodemailer from "nodemailer";
+
+// ── E-post via Strato SMTP ────────────────────────────────────────────────────
+function getMailTransporter() {
+  if (!process.env.SMTP_PASSWORD) return null;
+  return nodemailer.createTransport({
+    host: "smtp.strato.com",
+    port: 465,
+    secure: true,
+    auth: {
+      user: "kontakt@minstory.se",
+      pass: process.env.SMTP_PASSWORD,
+    },
+  });
+}
+
+async function sendOrderConfirmation({ to, customerName, bookTitle, printOption, totalPrice }) {
+  const transporter = getMailTransporter();
+  if (!transporter || !to) return;
+
+  const printLabel = printOption === "hard" ? "Inbunden bok (hårdpärm)" : "Häftad bok (mjukpärm)";
+  const priceStr = `${totalPrice} kr`;
+
+  await transporter.sendMail({
+    from: '"Minstory" <kontakt@minstory.se>',
+    to,
+    subject: `Orderbekräftelse – ${bookTitle || "Din bok"}`,
+    html: `
+      <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#222">
+        <h2 style="color:#7c3aed">Tack för din beställning, ${customerName || ""}! 🎉</h2>
+        <p>Vi har tagit emot din beställning och påbörjar trycket av din bok.</p>
+        <table style="width:100%;border-collapse:collapse;margin:24px 0">
+          <tr><td style="padding:8px 0;border-bottom:1px solid #eee;color:#666">Boktitel</td><td style="padding:8px 0;border-bottom:1px solid #eee;font-weight:bold">${bookTitle || "–"}</td></tr>
+          <tr><td style="padding:8px 0;border-bottom:1px solid #eee;color:#666">Tryckalternativ</td><td style="padding:8px 0;border-bottom:1px solid #eee">${printLabel}</td></tr>
+          <tr><td style="padding:8px 0;color:#666">Totalt</td><td style="padding:8px 0;font-weight:bold;color:#7c3aed">${priceStr}</td></tr>
+        </table>
+        <p style="color:#555">Leveranstid är ca 7–14 arbetsdagar. Har du frågor? Svara på detta mail eller kontakta oss på <a href="mailto:kontakt@minstory.se">kontakt@minstory.se</a>.</p>
+        <p style="margin-top:32px;color:#999;font-size:12px">Minstory.se – personliga barnböcker</p>
+      </div>
+    `,
+  });
+}
 
 // Returnerar Firestore-instans för den namngivna databasen "default"
 function getDb() {
@@ -427,7 +469,7 @@ app.get("/api/health", (_req, res) => res.json({ ok: true }));
 // ── POST /api/order-print ─────────────────────────────────────────────────────
 // Tar emot beställning av tryckt bok (tillval efter AI-generering).
 app.post("/api/order-print", express.json(), async (req, res) => {
-  const { book, printOption, totalPrice } = req.body || {};
+  const { book, printOption, totalPrice, customerEmail, customerName } = req.body || {};
 
   if (!book || !printOption || !totalPrice) {
     return res.status(400).json({ error: "book, printOption och totalPrice krävs." });
@@ -445,6 +487,8 @@ app.post("/api/order-print", express.json(), async (req, res) => {
         bookFormat: book.format || null,
         printOption,
         totalPrice: Number(totalPrice),
+        customerEmail: customerEmail || null,
+        customerName: customerName || null,
         status: "pending",
         createdAt: FieldValue.serverTimestamp(),
       });
@@ -454,12 +498,27 @@ app.post("/api/order-print", express.json(), async (req, res) => {
     // Loggar felet men returnerar ändå success till klienten
   }
 
+  // Skicka orderbekräftelse till kunden
+  try {
+    await sendOrderConfirmation({
+      to: customerEmail,
+      customerName,
+      bookTitle: book.title,
+      printOption,
+      totalPrice,
+    });
+  } catch (err) {
+    console.error("[order-print] E-post fel:", err.message);
+    // Skickar inte fel till klienten om e-post misslyckas
+  }
+
   console.log("[order-print]", {
     title: book.title,
     pages: book.pages,
     format: book.format,
     printOption,
     totalPrice,
+    customerEmail,
     receivedAt: new Date().toISOString(),
   });
 

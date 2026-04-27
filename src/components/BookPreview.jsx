@@ -12,7 +12,7 @@ const FORMAT_LABELS = {
 
 // (PDF-export hanteras av src/utils/pdfExport.js)
 
-export function BookPreview({ book, onReset, isPreview = false, totalPageCount, price, onGenerateFull, onSaveAccount, accountSaved }) {
+export function BookPreview({ book, onReset, isPreview = false, totalPageCount, price, onGenerateFull, onSaveAccount, accountSaved, customerEmail, customerName }) {
   const [currentPage, setCurrentPage] = useState(0); // 0 = omslag
   const [animDir, setAnimDir] = useState(null); // "left" | "right" | null
   const [hoveredSide, setHoveredSide] = useState(null); // "left" | "right" | null
@@ -29,13 +29,15 @@ export function BookPreview({ book, onReset, isPreview = false, totalPageCount, 
     if (!printOption) return;
     setOrderingPrint(true);
     try {
-      const res = await fetch("/api/order-print", {
+      const res = await fetch(`${import.meta.env.VITE_API_URL || ""}/api/order-print`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           book: { title: book.title, format: book.format, pages: book.pages.length },
           printOption,
           totalPrice,
+          customerEmail: customerEmail || "",
+          customerName: customerName || "",
         }),
       });
       if (res.ok) setPrintOrdered(true);
