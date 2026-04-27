@@ -8,35 +8,18 @@ import { rateLimit } from "express-rate-limit";
 import { uploadFromUrl, uploadFromBase64 } from "./uploadToStorage.js";
 import { getApps } from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
-import nodemailer from "nodemailer";
+import { Resend } from "resend";
 
-// ── E-post via Strato SMTP ────────────────────────────────────────────────────
-function getMailTransporter() {
-  if (!process.env.SMTP_PASSWORD) return null;
-  return nodemailer.createTransport({
-    host: "smtp.strato.com",
-    port: 587,
-    secure: false,
-    requireTLS: true,
-    auth: {
-      user: "kontakt@minstory.se",
-      pass: process.env.SMTP_PASSWORD,
-    },
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 10000,
-  });
-}
-
+// ── E-post via Resend ─────────────────────────────────────────────────────────
 async function sendOrderConfirmation({ to, customerName, bookTitle, printOption, totalPrice }) {
-  const transporter = getMailTransporter();
-  if (!transporter || !to) return;
+  if (!process.env.RESEND_API_KEY || !to) return;
 
+  const resend = new Resend(process.env.RESEND_API_KEY);
   const printLabel = printOption === "hard" ? "Inbunden bok (hårdpärm)" : "Häftad bok (mjukpärm)";
   const priceStr = `${totalPrice} kr`;
 
-  await transporter.sendMail({
-    from: '"Minstory" <kontakt@minstory.se>',
+  await resend.emails.send({
+    from: "Minstory <kontakt@minstory.se>",
     to,
     subject: `Orderbekräftelse – ${bookTitle || "Din bok"}`,
     html: `
@@ -48,7 +31,7 @@ async function sendOrderConfirmation({ to, customerName, bookTitle, printOption,
           <tr><td style="padding:8px 0;border-bottom:1px solid #eee;color:#666">Tryckalternativ</td><td style="padding:8px 0;border-bottom:1px solid #eee">${printLabel}</td></tr>
           <tr><td style="padding:8px 0;color:#666">Totalt</td><td style="padding:8px 0;font-weight:bold;color:#7c3aed">${priceStr}</td></tr>
         </table>
-        <p style="color:#555">Leveranstid är ca 7–14 arbetsdagar. Har du frågor? Svara på detta mail eller kontakta oss på <a href="mailto:kontakt@minstory.se">kontakt@minstory.se</a>.</p>
+        <p style="color:#555">Leveranstid är ca 7–14 arbetsdagar. Har du frågor? Kontakta oss på <a href="mailto:kontakt@minstory.se">kontakt@minstory.se</a>.</p>
         <p style="margin-top:32px;color:#999;font-size:12px">Minstory.se – personliga barnböcker</p>
       </div>
     `,
