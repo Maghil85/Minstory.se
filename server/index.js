@@ -55,10 +55,19 @@ const generalLimit = rateLimit({
 app.use("/api/generate-book", generateLimit);
 app.use("/api/", generalLimit);
 
-const openai = new OpenAI({
-  apiKey:  process.env.OPENAI_API_KEY,
-  project: process.env.OPENAI_PROJECT_ID, // valfritt — proj_bHA7...
-});
+// Lazy-initialiserad — kastar inte fel vid saknad API-nyckel vid uppstart
+let _openai = null;
+function getOpenAI() {
+  if (_openai) return _openai;
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY saknas. Lägg till den i Railway Variables.");
+  }
+  _openai = new OpenAI({
+    apiKey:  process.env.OPENAI_API_KEY,
+    project: process.env.OPENAI_PROJECT_ID,
+  });
+  return _openai;
+}
 
 // ── Multer: minne, max 8 MB, enbart bilder ───────────────────────────────────
 const upload = multer({
@@ -187,7 +196,7 @@ function placeholderImage(index, format) {
 // ── GPT-4o Vision: analysera kundernas foto ───────────────────────────────────
 async function analysePhoto(imageBuffer, mimeType) {
   const base64 = imageBuffer.toString("base64");
-  const resp = await openai.chat.completions.create({
+  const resp = await getOpenAI().chat.completions.create({
     model: "gpt-4o",
     messages: [{
       role: "user",
@@ -259,7 +268,7 @@ const dalleSize = (fmt) => {
 async function generateImageDalle(prompt, format, fallbackIndex) {
   const fmtStyle = FORMAT_IMAGE_STYLE[format] || FORMAT_IMAGE_STYLE.classic;
   try {
-    const resp = await openai.images.generate({
+    const resp = await getOpenAI().images.generate({
       model: "dall-e-3",
       prompt: `${fmtStyle.stylePrefix}. ${prompt}`,
       n: 1,
@@ -282,7 +291,7 @@ async function refinePageText(imageUrl, originalText, pageNumber) {
   // Hoppa över platshållarbilder (picsum.photos)
   if (!imageUrl || imageUrl.includes("picsum.photos")) return originalText;
   try {
-    const resp = await openai.chat.completions.create({
+    const resp = await getOpenAI().chat.completions.create({
       model: "gpt-4o",
       messages: [{
         role: "user",
@@ -323,7 +332,7 @@ app.post("/api/generate-book", upload.single("photo"), async (req, res) => {
 
   try {
 
-    const completion = await openai.chat.completions.create({
+    const completion = await getOpenAI().chat.completions.create({
       model: "gpt-4o-mini",
       messages: [
         {
@@ -455,6 +464,10 @@ app.post("/api/order-print", express.json(), async (req, res) => {
   });
 
   return res.json({ success: true, message: "Order mottagen" });
+});
+
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok", ts: new Date().toISOString() });
 });
 
 app.listen(PORT, () => {
