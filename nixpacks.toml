@@ -1,0 +1,8 @@
+# Railway/Nixpacks config för backend-only deployment
+# Vite-frontend byggs INTE här — det deployas separat via Firebase Hosting
+
+[phases.build]
+cmds = ["npm install --production=false"]
+
+[start]
+cmd = "node server/index.js"
