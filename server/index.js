@@ -456,6 +456,33 @@ app.post("/api/generate-book", upload.single("photo"), async (req, res) => {
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
+// ── GET /api/proxy-image ───────────────────────────────────────────────────────
+// Server-side image proxy to bypass CORS restrictions on Firebase Storage.
+// Only proxies Firebase Storage URLs to prevent abuse.
+app.get("/api/proxy-image", async (req, res) => {
+  const { url } = req.query;
+  if (
+    !url ||
+    (!url.startsWith("https://firebasestorage.googleapis.com/") &&
+     !url.startsWith("https://storage.googleapis.com/"))
+  ) {
+    return res.status(400).json({ error: "Only Firebase Storage URLs are allowed." });
+  }
+  try {
+    const upstream = await fetch(url);
+    if (!upstream.ok) return res.status(upstream.status).end();
+    const contentType = upstream.headers.get("content-type") || "image/png";
+    res.setHeader("Content-Type", contentType);
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.setHeader("Access-Control-Allow-Origin", "*");
+    const buffer = await upstream.arrayBuffer();
+    res.end(Buffer.from(buffer));
+  } catch (err) {
+    console.error("[proxy-image]", err.message);
+    res.status(502).end();
+  }
+});
+
 // ── POST /api/order-print ─────────────────────────────────────────────────────
 // Tar emot beställning av tryckt bok (tillval efter AI-generering).
 app.post("/api/order-print", express.json(), async (req, res) => {

@@ -27,11 +27,13 @@ export function SwishPayment({ price, pageCount, personName, onPaid, onBack }) {
 
   useEffect(() => {
     if (countdown === null || countdown <= 0) return;
-    timerRef.current = setTimeout(() => setCountdown((c) => c - 1), 1000);
+    timerRef.current = setTimeout(() => {
+      const next = countdown - 1;
+      setCountdown(next);
+      if (next === 0) onPaid(); // automatisk start när tid är ute
+    }, 1000);
     return () => clearTimeout(timerRef.current);
   }, [countdown]);
-
-  const canConfirm = countdown !== null && countdown === 0;
 
   return (
     <section
@@ -115,50 +117,29 @@ export function SwishPayment({ price, pageCount, personName, onPaid, onBack }) {
           Fungerar på mobil · Swish måste vara installerat
         </p>
 
-        {/* Bekräftelseknapp — visas med countdown efter Swish-klick */}
+        {/* Status efter Swish-klick */}
         {countdown === null ? (
           <p style={{ color: "rgba(255,255,255,0.35)", fontSize: fonts.size.xs, textAlign: "center", margin: `0 0 ${spacing.md}` }}>
-            Öppna Swish-appen ovan och genomför betalningen innan du bekräftar.
+            Öppna Swish-appen ovan och genomför betalningen. Boken startas automatiskt.
           </p>
-        ) : countdown > 0 ? (
+        ) : (
           <div style={{ textAlign: "center", marginBottom: spacing.md }}>
             <p style={{ color: "rgba(255,255,255,0.55)", fontSize: fonts.size.sm, margin: `0 0 ${spacing.sm}` }}>
-              Genomför betalningen i Swish…
+              {countdown > 0 ? "Genomför betalningen i Swish…" : "Betalning mottagen — startar din bok! 🎉"}
             </p>
             <div style={{
               display: "inline-flex", alignItems: "center", justifyContent: "center",
-              width: 56, height: 56, borderRadius: "50%",
-              border: `3px solid ${colors.primary}`,
-              color: colors.primary, fontSize: fonts.size.lg, fontWeight: fonts.weight.extrabold,
+              width: 64, height: 64, borderRadius: "50%",
+              border: `3px solid ${countdown > 0 ? colors.primary : "#00A870"}`,
+              color: countdown > 0 ? colors.primary : "#00A870",
+              fontSize: countdown > 0 ? fonts.size.lg : 28,
+              fontWeight: fonts.weight.extrabold,
+              transition: "border-color 0.3s, color 0.3s",
             }}>
-              {countdown}
+              {countdown > 0 ? countdown : "✓"}
             </div>
           </div>
-        ) : null}
-        <button
-          onClick={onPaid}
-          disabled={!canConfirm}
-          style={{
-            width: "100%",
-            padding: `${spacing.lg} ${spacing["3xl"]}`,
-            borderRadius: "14px",
-            border: "none",
-            background: canConfirm
-              ? `linear-gradient(135deg, ${colors.primary}, ${colors.primaryDark})`
-              : "rgba(255,255,255,0.10)",
-            color: canConfirm ? "#fff" : "rgba(255,255,255,0.25)",
-            fontSize: fonts.size.md,
-            fontWeight: fonts.weight.bold,
-            cursor: canConfirm ? "pointer" : "not-allowed",
-            fontFamily: "inherit",
-            boxShadow: canConfirm ? "0 4px 20px rgba(245,158,11,0.40)" : "none",
-            marginBottom: spacing.md,
-          }}
-          onMouseOver={(e) => { if (canConfirm) { e.currentTarget.style.transform = "translateY(-2px)"; e.currentTarget.style.boxShadow = "0 8px 28px rgba(245,158,11,0.50)"; } }}
-          onMouseOut={(e)  => { if (canConfirm) { e.currentTarget.style.transform = ""; e.currentTarget.style.boxShadow = "0 4px 20px rgba(245,158,11,0.40)"; } }}
-        >
-          {countdown === null ? "✅ Jag har betalat — skapa min bok nu" : countdown > 0 ? `⏳ Väntar på betalning… (${countdown}s)` : "✅ Jag har betalat — skapa min bok nu"}
-        </button>
+        )}
 
         <button
           onClick={onBack}

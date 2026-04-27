@@ -232,14 +232,27 @@ function buildBackCoverHTML(book, w, h) {
 
 /**
  * Konverterar en bild-URL (eller data:-URI) till en base64 data URI.
- * Returnerar originalet om hämtningen misslyckas.
+ * Firebase Storage-URLs proxyas via Railway-servern för att undvika CORS-blockeringar.
  */
+const API_URL = typeof import.meta !== "undefined"
+  ? (import.meta.env?.VITE_API_URL || "")
+  : "";
+
 async function toDataUri(url) {
   if (!url) return url;
   if (url.startsWith("data:")) return url;
+
+  // Använd server-proxy för Firebase Storage-URLs
+  const isFirebase =
+    url.startsWith("https://firebasestorage.googleapis.com/") ||
+    url.startsWith("https://storage.googleapis.com/");
+  const fetchUrl = isFirebase
+    ? `${API_URL}/api/proxy-image?url=${encodeURIComponent(url)}`
+    : url;
+
   try {
-    const res = await fetch(url, { mode: "cors" });
-    if (!res.ok) throw new Error("bad status");
+    const res = await fetch(fetchUrl);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const blob = await res.blob();
     return await new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -247,8 +260,9 @@ async function toDataUri(url) {
       reader.onerror = reject;
       reader.readAsDataURL(blob);
     });
-  } catch {
-    return url; // fall back to original URL
+  } catch (err) {
+    console.warn("[pdfExport] toDataUri failed for", url, err.message);
+    return url;
   }
 }
 
