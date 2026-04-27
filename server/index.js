@@ -456,8 +456,7 @@ app.post("/api/generate-book", upload.single("photo"), async (req, res) => {
 // ── Health check ──────────────────────────────────────────────────────────────
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 
-// ── GET /api/proxy-image ───────────────────────────────────────────────────────
-// Server-side image proxy to bypass CORS restrictions on Firebase Storage.
+// ── GET /api/proxy-image ───────────────────────────────────────────────────────// Server-side image proxy to bypass CORS restrictions on Firebase Storage.
 // Only proxies Firebase Storage URLs to prevent abuse.
 app.get("/api/proxy-image", async (req, res) => {
   const { url } = req.query;
@@ -481,6 +480,26 @@ app.get("/api/proxy-image", async (req, res) => {
     console.error("[proxy-image]", err.message);
     res.status(502).end();
   }
+});
+
+// ── POST /api/waitlist ────────────────────────────────────────────────────────
+// Sparar e-post för väntlista i Firestore
+app.post("/api/waitlist", express.json(), async (req, res) => {
+  const { email } = req.body || {};
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return res.status(400).json({ error: "Ogiltig e-postadress." });
+  }
+  try {
+    const { getFirestore } = await import("firebase-admin/firestore");
+    const db = getFirestore();
+    await db.collection("waitlist").add({
+      email: email.toLowerCase().trim(),
+      createdAt: new Date(),
+    });
+  } catch (err) {
+    console.error("[waitlist]", err.message);
+  }
+  return res.json({ ok: true });
 });
 
 // ── POST /api/order-print ─────────────────────────────────────────────────────
